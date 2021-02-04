@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+import os
 
 from dataset import Dictionary, VQAFeatureDataset_Custom
 import base_model
@@ -52,27 +53,20 @@ def get_answer(p, label2ans):
 
 @torch.no_grad()
 def get_logits(model, label2ans, image, questions_tensor):
-    v, b = image
+    v = image['features']
+    b = image['spatial']
     q = questions_tensor
 
-    batch_size = v.size(0)
     v = v.cuda()
     b = b.cuda()
     q = q.cuda()
+
+    print(v.shape, b.shape, q.shape)
+
     logits, att = model(v, b, q, None)
-    
     return get_answer(logits.data[0], label2ans)
 
 
-def make_json(logits, qIds, dataloader):
-    utils.assert_eq(logits.size(0), len(qIds))
-    results = []
-    for i in range(logits.size(0)):
-        result = {}
-        result['question_id'] = qIds[i].item()
-        result['answer'] = get_answer(logits[i], dataloader)
-        results.append(result)
-    return results
 
 
 
@@ -94,12 +88,9 @@ def tokenize(questions, dictionary, max_length=14):
         entries.append({"q_token": tokens})
     return entries
 
-def tensorize(entries):
-    for entry in entries:
-        question = torch.from_numpy(np.array(entry['q_token']))
-        entry['q_token'] = question
-
-    return entries
+def tensorize(entry):
+  question = torch.from_numpy(np.array(entry['q_token'])) 
+  return question
 
 # if __name__ == '__main__':
 #     args = parse_args()
@@ -152,30 +143,31 @@ if __name__ == '__main__':
 
     torch.backends.cudnn.benchmark = True
 
-    dictionary = Dictionary.load_from_file('data/dictionary.pkl')
-    ans2label_path = os.path.join(dataroot, 'cache', 'trainval_ans2label.pkl')
-    label2ans_path = os.path.join(dataroot, 'cache', 'trainval_label2ans.pkl')
-    ans2label = cPickle.load(open(ans2label_path, 'rb'))
-    label2ans = cPickle.load(open(label2ans_path, 'rb'))
+    dictionary = Dictionary.load_from_file('ban-vqa-demo/data/dictionary.pkl')
+    ans2label_path = os.path.join('ban-vqa-demo/data/cache', 'trainval_ans2label.pkl')
+    label2ans_path = os.path.join('ban-vqa-demo/data/cache', 'trainval_label2ans.pkl')
+    ans2label = pkl.load(open(ans2label_path, 'rb'))
+    label2ans = pkl.load(open(label2ans_path, 'rb'))
     num_ans_candidates = len(ans2label)
 
-    eval_dset = VQAFeatureDataset_Custom(dictionary, adaptive=True)
-
+    eval_dset = VQAFeatureDataset_Custom(dictionary, len(ans2label), adaptive=True)
+    print(ans2label)
     n_device = torch.cuda.device_count()
     batch_size = args.batch_size * n_device
 
     constructor = 'build_%s' % args.model
     model = getattr(base_model, constructor)(eval_dset, args.num_hid, args.op, args.gamma).cuda()
 
-    questions = args.questions
+    questions = [args.questions]
     questions_token = tokenize(questions, dictionary)
-    questions_tensor = tensorize(questions_token)
+    questions_tensor = tensorize(questions_token[0])
+    questions_tensor = torch.unsqueeze(questions_tensor, 0)
 
     image = pkl.load(open(args.image, 'rb'))
 
 
     def process(model, label2ans, image, questions_tensor):
-        model_path = 'saved_models/ban/model_epoch12.pth'
+        model_path = 'ban-vqa-demo/saved_models/model_epoch12.pth'
     
         print('loading %s' % model_path)
         model_data = torch.load(model_path)
@@ -191,3 +183,4 @@ if __name__ == '__main__':
 
 
     answer = process(model, label2ans, image, questions_tensor)
+    print(answer)

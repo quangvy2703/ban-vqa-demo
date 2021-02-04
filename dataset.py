@@ -420,23 +420,12 @@ class VQAFeatureDataset(Dataset):
 
 
 class VQAFeatureDataset_Custom(Dataset):
-    def __init__(self, dictionary, questions, dataroot='data', adaptive=False):
-        super(VQAFeatureDataset, self).__init__()
-
-        ans2label_path = os.path.join(dataroot, 'cache', 'trainval_ans2label.pkl')
-        label2ans_path = os.path.join(dataroot, 'cache', 'trainval_label2ans.pkl')
-        self.ans2label = cPickle.load(open(ans2label_path, 'rb'))
-        self.label2ans = cPickle.load(open(label2ans_path, 'rb'))
-        self.num_ans_candidates = len(self.ans2label)
+    def __init__(self, dictionary, num_ans_candidates, adaptive=False):
+        super(VQAFeatureDataset_Custom, self).__init__()
 
         self.dictionary = dictionary
         self.adaptive = adaptive
-
-        self.entries = []
-        for question in questions:
-            self.entries.append({'question': question})
-        self.tokenize()
-        self.tensorize()
+        self.num_ans_candidates = num_ans_candidates
         self.v_dim = 2048
         self.s_dim = 6
 
